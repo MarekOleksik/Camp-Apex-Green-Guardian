@@ -3,6 +3,7 @@ public class GardenTriggerHandler {
 	public static void onBeforeInsert(List<CAMPX__Garden__c > newRecords) {
 		setDefaultValuesOnNewRecords(newRecords);  
 		setManagerStartDate(newRecords, null);
+		calculateCapacity(newRecords, null);
 	}
 	
 	public static void onAfterInsert(List<CAMPX__Garden__c > newRecords) {
@@ -11,10 +12,28 @@ public class GardenTriggerHandler {
 
 	public static void onBeforeUpdate(List<CAMPX__Garden__c > newRecords, Map<Id,CAMPX__Garden__c> oldRecordsMap) { 
 		setManagerStartDate(newRecords, oldRecordsMap);
+		calculateCapacity(newRecords, oldRecordsMap);
 	}
 	
 	public static void onAfterUpdate(List<CAMPX__Garden__c > newRecords, Map<Id,CAMPX__Garden__c> oldRecordsMap) {
 		createTasksWhenManagerIsPopulated(newRecords, oldRecordsMap);
+	}
+
+	private static void calculateCapacity(List<CAMPX__Garden__c > newRecords, Map<Id,CAMPX__Garden__c> oldRecordsMap) {
+		for (CAMPX__Garden__c garden : newRecords) { 
+			if (oldRecordsMap == null || (oldRecordsMap != null 
+				&& (garden.CAMPX__Total_Plant_Count__c != oldRecordsMap.get(garden.Id).CAMPX__Total_Plant_Count__c 
+				|| garden.CAMPX__Max_Plant_Count__c != oldRecordsMap.get(garden.Id).CAMPX__Max_Plant_Count__c))) {
+					Decimal totalPlants = garden.CAMPX__Total_Plant_Count__c ?? 0;
+					Decimal maxPlants =  garden.CAMPX__Max_Plant_Count__c ?? 0;
+					if (maxPlants != 0) {
+						garden.CAMPX__Capacity__c = totalPlants / maxPlants * 100;
+					} else {
+						garden.CAMPX__Capacity__c = 0;
+					}
+					
+				}
+		}
 	}
 
 	private static void setManagerStartDate(List<CAMPX__Garden__c> newRecords, Map<Id,CAMPX__Garden__c> oldRecordsMap ) {
