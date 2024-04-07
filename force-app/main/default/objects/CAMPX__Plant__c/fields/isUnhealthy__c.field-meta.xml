@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>isUnhealthy__c</fullName>
+    <externalId>false</externalId>
+    <formula>OR( TEXT(CAMPX__Status__c) == &apos;Sick&apos;,TEXT(CAMPX__Status__c) == &apos;Deceased&apos;,TEXT(CAMPX__Status__c) == &apos;Wilting&apos;)</formula>
+    <formulaTreatBlanksAs>BlankAsZero</formulaTreatBlanksAs>
+    <label>Unhealthy?</label>
+    <trackTrending>false</trackTrending>
+    <type>Checkbox</type>
+</CustomField>
