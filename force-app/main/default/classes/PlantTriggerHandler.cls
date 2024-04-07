@@ -3,14 +3,44 @@ public class PlantTriggerHandler {
 	public static void onAfterInsert(List<CAMPX__Plant__c> newRecords) {
 		setDefaultValuesOnNewRecords(newRecords);
 		setTotalPlantCountOnGarden(newRecords, null);
+		aggregateUnhealthyPlantCount(newRecords,null);
 	}
 
 	public static void onAfterUpdate(List<CAMPX__Plant__c> newRecords, Map<Id,CAMPX__Plant__c> oldRecordsMap) {
 		setTotalPlantCountOnGarden(newRecords, oldRecordsMap);
+		aggregateUnhealthyPlantCount(newRecords,oldRecordsMap);
 	}
 
 	public static void onAfterDelete(List<CAMPX__Plant__c> oldRecords) {
 		setTotalPlantCountOnGarden(oldRecords, null);
+		aggregateUnhealthyPlantCount(oldRecords,null);
+	}
+
+	private static void aggregateUnhealthyPlantCount(List<CAMPX__Plant__c> newRecords,Map<Id,CAMPX__Plant__c> oldRecordsMap) {
+		Set<Id> gardenIds = new Set<Id>();
+		for (CAMPX__Plant__c plant : newRecords) { 
+			if (plant.isUnhealthy__c || (oldRecordsMap != null && plant.isUnhealthy__c != oldRecordsMap.get(plant.Id).isUnhealthy__c)) {
+				gardenIds.add(plant.CAMPX__Garden__c);
+			}
+			
+			if (oldRecordsMap != null && plant.CAMPX__Garden__c != oldRecordsMap.get(plant.Id).CAMPX__Garden__c) {
+				gardenIds.add(oldRecordsMap.get(plant.Id).CAMPX__Garden__c);
+			}
+		}
+
+		List<CAMPX__Garden__c> gardensToUpdate = [
+			SELECT Id, CAMPX__Total_Unhealthy_Plant_Count__c,
+				(SELECT Id 
+				FROM CAMPX__Plants__r 
+				WHERE isUnhealthy__c = true) 
+			FROM CAMPX__Garden__c 
+			WHERE Id IN :gardenIds];
+
+		for (CAMPX__Garden__c garden : gardensToUpdate) {
+			garden.CAMPX__Total_Unhealthy_Plant_Count__c = garden.CAMPX__Plants__r.size();
+		}
+
+		update gardensToUpdate;
 	}
 
 	private static void setTotalPlantCountOnGarden(List<CAMPX__Plant__c> newRecords,Map<Id,CAMPX__Plant__c> oldRecordsMap) {
@@ -21,19 +51,16 @@ public class PlantTriggerHandler {
 				gardenIds.add(oldRecordsMap.get(plant.Id).CAMPX__Garden__c);
 			}
 		}
-		System.debug('gardenIds: ' + gardenIds);
 
 		List<CAMPX__Garden__c> gardensToUpdate = [
 			SELECT Id, CAMPX__Total_Plant_Count__c,
-			(SELECT Id FROM CAMPX__Plants__r) 
+				(SELECT Id 
+				FROM CAMPX__Plants__r) 
 			FROM CAMPX__Garden__c 
 			WHERE Id IN :gardenIds];
 
 
 		for (CAMPX__Garden__c garden : gardensToUpdate) {
-			System.debug('garden: ' + garden);
-			System.debug('garden: ' + garden.CAMPX__Plants__r);
-			System.debug('garden: ' + garden.CAMPX__Plants__r.size());
 			garden.CAMPX__Total_Plant_Count__c = garden.CAMPX__Plants__r.size();
 		}
 
@@ -63,4 +90,5 @@ public class PlantTriggerHandler {
 			
 		update plantsToUpdate ;
 	}
+
 }

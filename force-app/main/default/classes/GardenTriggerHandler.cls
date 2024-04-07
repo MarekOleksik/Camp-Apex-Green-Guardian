@@ -1,9 +1,19 @@
 public class GardenTriggerHandler {
 
+	private static final String PERMANENT_CLOSURE_STATUS = 'Permanent Closure';
+	private static final String OPERATIONAL_STATUS = 'Operational';
+	private static final String TEMPORARY_CLOSURE_STATUS = 'Temporary Closure';
+	private static final String OVER_CAPACITY_STATUS = 'Over Capacity';
+	private static final String AWAITING_RESOURCES_STATUS = 'Awaiting Resources';
+	private static final String COMPLETED_STATUS = 'Completed';
+
+
 	public static void onBeforeInsert(List<CAMPX__Garden__c > newRecords) {
 		setDefaultValuesOnNewRecords(newRecords);  
 		setManagerStartDate(newRecords, null);
 		calculateCapacity(newRecords, null);
+		calculateHealthIndex(newRecords, null);
+		setGardenStatus(newRecords, null);
 	}
 	
 	public static void onAfterInsert(List<CAMPX__Garden__c > newRecords) {
@@ -13,26 +23,77 @@ public class GardenTriggerHandler {
 	public static void onBeforeUpdate(List<CAMPX__Garden__c > newRecords, Map<Id,CAMPX__Garden__c> oldRecordsMap) { 
 		setManagerStartDate(newRecords, oldRecordsMap);
 		calculateCapacity(newRecords, oldRecordsMap);
+		calculateHealthIndex(newRecords, oldRecordsMap);
+		setGardenStatus(newRecords, oldRecordsMap);
 	}
 	
 	public static void onAfterUpdate(List<CAMPX__Garden__c > newRecords, Map<Id,CAMPX__Garden__c> oldRecordsMap) {
 		createTasksWhenManagerIsPopulated(newRecords, oldRecordsMap);
 	}
 
+	private static void setGardenStatus(List<CAMPX__Garden__c > newRecords, Map<Id,CAMPX__Garden__c> oldRecordsMap) {
+		for (CAMPX__Garden__c garden : newRecords) {  
+			if (garden.CAMPX__Status__c != PERMANENT_CLOSURE_STATUS
+				&& (oldRecordsMap == null 
+				|| (garden.CAMPX__Total_Plant_Count__c != oldRecordsMap.get(garden.Id).CAMPX__Total_Plant_Count__c) 
+				|| (garden.CAMPX__Capacity__c != oldRecordsMap.get(garden.Id).CAMPX__Capacity__c) 
+				|| (garden.CAMPX__Health_Index__c != oldRecordsMap.get(garden.Id).CAMPX__Health_Index__c) 
+				|| (garden.CAMPX__Minimum_Plant_Count__c != oldRecordsMap.get(garden.Id).CAMPX__Minimum_Plant_Count__c))) {
+				garden.CAMPX__Status__c = setStatusForGarden(garden);
+				}
+		}
+	}
+
+	private static String setStatusForGarden(CAMPX__Garden__c garden) {
+		if (garden.CAMPX__Capacity__c >= 70 
+			&& garden.CAMPX__Capacity__c <= 100 
+			&& garden.CAMPX__Total_Plant_Count__c >= garden.CAMPX__Minimum_Plant_Count__c 
+			&& garden.CAMPX__Health_Index__c >= 70) {
+				return garden.CAMPX__Status__c = OPERATIONAL_STATUS;	
+		} else if (garden.CAMPX__Capacity__c == 0) {
+			return garden.CAMPX__Status__c = TEMPORARY_CLOSURE_STATUS;
+		} else if (garden.CAMPX__Capacity__c > 100) {
+			return garden.CAMPX__Status__c = OVER_CAPACITY_STATUS;
+		} else if ((garden.CAMPX__Capacity__c > 0
+					&& garden.CAMPX__Capacity__c < 70) 
+					|| garden.CAMPX__Health_Index__c < 70 
+					|| garden.CAMPX__Total_Plant_Count__c < garden.CAMPX__Minimum_Plant_Count__c) {
+			return garden.CAMPX__Status__c = AWAITING_RESOURCES_STATUS;
+		}
+		return '';
+	}
+
+	private static void calculateHealthIndex(List<CAMPX__Garden__c > newRecords, Map<Id,CAMPX__Garden__c> oldRecordsMap) {
+		for (CAMPX__Garden__c garden : newRecords) {  
+			if (oldRecordsMap == null 
+				|| (garden.CAMPX__Total_Plant_Count__c != oldRecordsMap.get(garden.Id).CAMPX__Total_Plant_Count__c) 
+				|| (garden.CAMPX__Total_Unhealthy_Plant_Count__c != oldRecordsMap.get(garden.Id).CAMPX__Total_Unhealthy_Plant_Count__c)) {
+				garden.CAMPX__Health_Index__c = calculateHealthIndexForGarden(garden);
+				}
+		}
+	}
+
+	private static Decimal calculateHealthIndexForGarden(CAMPX__Garden__c garden) {
+		if (garden.CAMPX__Total_Plant_Count__c != null && garden.CAMPX__Total_Unhealthy_Plant_Count__c != null && garden.CAMPX__Total_Plant_Count__c != 0){
+			return ((garden.CAMPX__Total_Plant_Count__c - garden.CAMPX__Total_Unhealthy_Plant_Count__c)/garden.CAMPX__Total_Plant_Count__c)*100;
+		} else {
+			return 0;
+		}
+	}
+
 	private static void calculateCapacity(List<CAMPX__Garden__c > newRecords, Map<Id,CAMPX__Garden__c> oldRecordsMap) {
 		for (CAMPX__Garden__c garden : newRecords) { 
-			if (oldRecordsMap == null || (oldRecordsMap != null 
-				&& (garden.CAMPX__Total_Plant_Count__c != oldRecordsMap.get(garden.Id).CAMPX__Total_Plant_Count__c 
+			if (oldRecordsMap == null 
+				|| (oldRecordsMap != null && (garden.CAMPX__Total_Plant_Count__c != oldRecordsMap.get(garden.Id).CAMPX__Total_Plant_Count__c 
 				|| garden.CAMPX__Max_Plant_Count__c != oldRecordsMap.get(garden.Id).CAMPX__Max_Plant_Count__c))) {
 					Decimal totalPlants = garden.CAMPX__Total_Plant_Count__c ?? 0;
 					Decimal maxPlants =  garden.CAMPX__Max_Plant_Count__c ?? 0;
-					if (maxPlants != 0) {
-						garden.CAMPX__Capacity__c = totalPlants / maxPlants * 100;
-					} else {
-						garden.CAMPX__Capacity__c = 0;
-					}
-					
+				if (maxPlants != 0) {
+					garden.CAMPX__Capacity__c = totalPlants / maxPlants * 100;
+				} else {
+					garden.CAMPX__Capacity__c = 0;
 				}
+			}
 		}
 	}
 
@@ -50,7 +111,7 @@ public class GardenTriggerHandler {
 	private static void setDefaultValuesOnNewRecords(List<CAMPX__Garden__c > newRecords) {
 		for (CAMPX__Garden__c garden : newRecords) {
 			if (String.isBlank(garden.CAMPX__Status__c)) {
-				garden.CAMPX__Status__c = 'Awaiting Resources';
+				garden.CAMPX__Status__c = AWAITING_RESOURCES_STATUS;
 			}
 			if (garden.CAMPX__Max_Plant_Count__c == null) {
 				garden.CAMPX__Max_Plant_Count__c = 100;
@@ -121,7 +182,7 @@ public class GardenTriggerHandler {
 			oldManagers.add(keys[0]);
 			gardenIds.add(keys[1]); 
 		}
-		return [SELECT Id, OwnerId, WhatId FROM Task WHERE Status != 'Completed' AND WhatId IN :gardenIds AND OwnerId IN :oldManagers];
+		return [SELECT Id, OwnerId, WhatId FROM Task WHERE Status != :COMPLETED_STATUS AND WhatId IN :gardenIds AND OwnerId IN :oldManagers];
 	}
 
 	
